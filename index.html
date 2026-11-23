@@ -1,0 +1,250 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Novela</title>
+<style>
+:root{--bg:#fafaf7;--fg:#222;--c:#fff;--ac:#6b4ce6;--mu:#777;--bd:#ddd;--rd:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#161618;--fg:#eee;--c:#222226;--mu:#999;--bd:#3a3a40;--rd:#ff7b6b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif;padding:env(safe-area-inset-top) 0 calc(60px + env(safe-area-inset-bottom))}
+main{padding:12px;max-width:700px;margin:auto}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 0;font-size:11px}nav .on{color:var(--ac);font-weight:700}
+textarea,input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--c);color:var(--fg);font:inherit;margin:4px 0}
+button.b{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:10px 14px;font:inherit;margin:4px 4px 4px 0}
+button.s{background:none;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:5px 9px;margin:2px}
+.card{background:var(--c);border:1px solid var(--bd);border-radius:10px;padding:10px;margin:8px 0}
+.mu{color:var(--mu);font-size:13px}.bad{color:var(--rd)}h3{margin:14px 0 4px}summary{cursor:pointer;font-weight:600}
+.pin{position:absolute;transform:translate(-50%,-100%);font-size:11px;background:var(--ac);color:#fff;border-radius:6px;padding:1px 5px;white-space:nowrap}
+img.t{max-width:100%;border-radius:8px}
+</style></head><body><div id="hd" class="mu" style="text-align:center;padding:6px"></div><main id="v"></main><nav id="nav"></nav>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),rid=()=>Math.random().toString(36).slice(2,9);
+let PJ=JSON.parse(localStorage.getItem('nvp')||'null')||{cur:'p1',list:[{id:'p1',name:'Mi novela'}]};
+const cur=()=>PJ.list.find(p=>p.id==PJ.cur)||PJ.list[0],pjSave=()=>localStorage.setItem('nvp',JSON.stringify(PJ));
+function load(){const x=Object.assign({ign:[],ideas:[],ents:[],rels:[],evs:[],issues:[],threads:[],routes:[],caps:[],end:'',map:{img:'',pins:[]}},JSON.parse(localStorage.getItem('nv_'+PJ.cur)||(PJ.cur=='p1'?localStorage.getItem('nv'):0)||'{}'));x.ents.forEach(e=>{e.id=e.id||rid();e.attrs=e.attrs||{};e.aliases=e.aliases||[];e.facts=e.facts||[];e.ap=e.ap||[]});return x}
+let S=load();
+S.ents.forEach(e=>{e.id=e.id||rid();e.attrs=e.attrs||{};e.aliases=e.aliases||[];e.facts=e.facts||[];e.ap=e.ap||[]});
+const save=()=>{try{localStorage.setItem('nv_'+PJ.cur,JSON.stringify(S))}catch(e){alert('Sin espacio: exportá un respaldo y usá imágenes más chicas')}};
+let tab='ideas',msg='',q='',pinE='',PQ=null,CH={},UNDO=null,tf='',DR='',WS=[],mm='auto',mroot='',sel='',GEO={};
+const KK=/^(provincia|region|zona|sierra|cordillera|reino|imperio|ciudad|aldea|pueblo|bosque|monte|montana|isla|castillo|templo|torre|puerto|desierto|valle|lago|rio)$/;
+const WH=/(\d+\s+anos\s+(?:antes|despues|atras)|al dia siguiente|hace\s+\w+\s+anos|en el ano\s+\d+|al amanecer|esa noche)/;
+const TABS={ideas:'Ideas',world:'Mundo',map:'Mapa',write:'Escribir',time:'Tiempo',guide:'Guía',more:'Más'};
+const T=['personaje','lugar','objeto','poder','faccion','otro'],COL={personaje:'#6b4ce6',lugar:'#2a9d5c',objeto:'#d98a1c',poder:'#d6336c',faccion:'#1c7ed6',otro:'#888'};
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const byId=id=>S.ents.find(e=>e.id==id);
+const STOP=new Set('el la los las un una unos unas y o pero cuando entonces luego despues antes mientras sin con por para que como si no su sus se lo le les al del de en a es era fue son ese esa esto eso aquel este esta hoy ayer manana tambien ya aunque porque donde todo todos cada sobre tras desde hasta nunca siempre ahora aqui alli asi ella el nosotros ellos ellas yo tu mi mis tus sus cuando una'.split(' '));
+const CAP=/[A-ZÁÉÍÓÚÑ][a-záéíóúñü]+(?:\s+(?:(?:de|del|la|las|los|el)\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñü]+)*/g;
+const REL='hermano|hermana|padre|madre|hijo|hija|amigo|amiga|enemigo|enemiga|esposo|esposa|mentor|maestro|maestra|rival|aliado|aliada|abuelo|abuela|tio|tia|primo|prima';
+function find(n){n=norm(n);if(CH[n])return CH[n].startsWith('new:')?null:byId(CH[n]);let r=S.ents.find(e=>norm(e.name)==n||e.aliases.some(a=>norm(a)==n));if(r)return r;
+ const c=S.ents.filter(e=>norm(e.name).startsWith(n+' ')||norm(e.name).endsWith(' '+n));return c.length==1?c[0]:null}
+function guess(name,pre){const w=norm(name.split(' ')[0]);
+ if(name.includes(' ')&&/^(reino|ciudad|bosque|monte|isla|castillo|aldea|pueblo|rio|lago|valle|templo|torre|puerto|desierto|montana|imperio)$/.test(w))return 'lugar';
+ if(/(espada|anillo|libro|cristal|amuleto|corona|baston|daga|mapa|llave)\s+(de\s+|del\s+)?$/.test(pre))return 'objeto';
+ if(/(orden|clan|gremio|casa|ejercito|hermandad|culto|secta)\s+(de\s+|del\s+)?$/.test(pre))return 'faccion';
+ if(/(magia|poder|hechizo|don|habilidad|tecnica)\s+(de\s+|del\s+)?$/.test(pre))return 'poder';
+ if(/\b(en|hacia|desde|hasta)\s+(el\s+|la\s+)?$/.test(pre))return 'lugar';return 'personaje'}
+const toks=s=>new Set(norm(s).split(/\W+/).filter(w=>w.length>3));
+const jac=(a,b)=>{let i=0;a.forEach(x=>b.has(x)&&i++);return i/(a.size+b.size-i||1)};
+const addIssue=(level,text)=>S.issues.push({level,text,id:rid()});
+function analyze(t,D){
+ const id=Date.now(),sents=t.split(/(?<=[.!?…])\s+|\n+/).map(s=>s.trim()).filter(Boolean),mids=new Set(),all=new Set(),st={ne:0,nf:0,ni:S.issues.length};let last=null;
+ sents.forEach(s=>{for(const m of s.matchAll(CAP))if(m.index>0)m[0].split(' ').forEach(x=>mids.add(norm(x)))});
+ sents.forEach(s=>{const ns=norm(s),ents=[];
+  const add=(name,type)=>{let e=find(name);if(!e){const k=norm(name);if(GEO[k])type='lugar';const nn=CH[k]&&CH[k].startsWith('new:')?CH[k].slice(4):name;e={id:rid(),type,name:nn,aliases:[],facts:[],ap:[],attrs:{},geo:GEO[k]||{},kind:type=='lugar'&&KK.test(norm(nn.split(' ')[0]))?norm(nn.split(' ')[0]):''};S.ents.push(e);st.ne++;if(CH[k])CH[k]=e.id}
+   else if(!e.name.includes(name)&&norm(e.name)!=norm(name)&&!e.aliases.includes(name)&&e.name.split(' ').includes(name)==false)e.aliases.push(name);
+   if(!ents.includes(e))ents.push(e)};
+  for(const m of s.matchAll(CAP)){let w=m[0].split(/\s+/);while(w.length&&STOP.has(norm(w[0])))w.shift();while(w.length&&STOP.has(norm(w[w.length-1])))w.pop();
+   if(!w.length)continue;const name=w.join(' ');if(S.ign.includes(norm(name)))continue;if(w.length==1&&m.index==0&&!find(name)&&!CH[norm(name)]&&!GEO[norm(name)]&&!mids.has(norm(name)))continue;
+   add(name,guess(name,norm(s.slice(0,m.index))))}
+  for(const m of s.matchAll(/\b(magia|poder|don|hechizo|habilidad)\s+(?:de|del)\s+([a-záéíóúñ]+)/gi))add(m[1][0].toUpperCase()+m[1].slice(1).toLowerCase()+' de '+m[2],'poder');
+  if(last&&!ents.some(e=>e.type=='personaje')&&/^(ella|el|vive|tiene|es|era|murio|muere|su)\b/.test(ns))ents.unshift(last);
+  if(!ents.length)return;
+  {const pj=ents.find(e=>e.type=='personaje');if(pj)last=pj}
+  {const L=ents.filter(e=>e.type=='lugar'),P=ents.filter(e=>e.type=='personaje'),mov=/\b(llega|llegan|viaja|viajan|viajo|va a|fue a|camina|cabalga|vuela|regresa|vuelve|parte|huye|se muda|navega|cruza|escapa|se dirige)\b/.test(ns);
+   if(L.length>=2){if(/\ba\s+\d+\s+(dias|horas|semanas|meses)\s+de\b/.test(ns))trip(L[0],L[1],ns);else if(mov)trip(L[0],L[L.length-1],ns);
+    else if(/\b(esta|queda|se encuentra|se ubica|ubicad[oa]s?|pertenece|forma parte|es parte|capital)\b/.test(ns)||/\b(ciudad|pueblo|aldea|villa|localidad|barrio)\s+(de|del)\b/.test(ns)){const km=ns.match(/\b(ciudad|pueblo|aldea)\s+(?:de|del)\b/);if(km&&!L[0].kind&&!/^(en|dentro de)\s/.test(ns))L[0].kind=km[1];/^(en|dentro de)\s/.test(ns)?setPar(L[1],L[0]):setPar(L[0],L[1])}}
+   if(L.length&&P.length){const tg=L[L.length-1];P.forEach(p=>{const o=byId(p.at);if(o&&o!==tg&&!mov&&!anc(tg).includes(o)&&!anc(o).includes(tg))addIssue('aviso',p.name+' estaba en '+o.name+' y ahora está en '+tg.name+' sin un viaje contado. ¿Cómo llegó y cuánto tardó?');if(mov&&o&&o!==tg)trip(o,tg,ns);p.at=tg.id})}
+   if(L.length==1){const g=inf(ns),o=L[0];if(Object.keys(g).length){o.geo=o.geo||{};for(const k in g){if(o.geo[k]&&o.geo[k]!=g[k]&&(k=='cli'||k=='veg'))addIssue('aviso',o.name+': ya figuraba con '+GL[k].toLowerCase()+' "'+o.geo[k]+'" y ahora "'+g[k]+'". ¿Cambia según la zona?');else if(!o.geo[k])o.geo[k]=g[k]}}}}
+  const subj=ents.find(e=>e.type=='personaje');
+  ents.forEach(e=>{all.add(e);if(!e.ap.includes(id))e.ap.push(id);
+   if(e.type=='personaje'&&e.dead&&e.dead!=id&&!/recuerd|fantasma|espiritu|memoria|vivia|habia|muerto|murio|tumba/.test(ns))addIssue('aviso',e.name+' murió antes, pero aparece actuando: "'+s.slice(0,80)+'"');
+   const tk=toks(s);if(e.facts.some(f=>jac(tk,toks(f.t))>=.7)){addIssue('redundancia','Ya habías contado algo muy parecido de '+e.name+': "'+s.slice(0,80)+'"');return}
+   e.facts.push({t:s,i:id});st.nf++});
+  if(subj){const A=[['ojos',/ojos\s+(\w+)/],['pelo',/(?:pelo|cabello)\s+(\w+)/],['edad',/tiene\s+(\d+)\s+anos/],['vive en',/vive\s+en\s+(?:el\s+|la\s+)?(\w+(?: \w+)?)/]];
+   A.forEach(([k,r])=>{const m=ns.match(r);if(!m)return;const v=m[1];if(subj.attrs[k]&&norm(subj.attrs[k])!=v&&k!='edad'&&k!='vive en')addIssue('contradiccion',subj.name+': antes tenía '+k+' "'+subj.attrs[k]+'" y ahora "'+v+'"');
+    else if(subj.attrs[k]&&subj.attrs[k]!=v)addIssue('aviso',subj.name+': '+k+' cambió de "'+subj.attrs[k]+'" a "'+v+'" (¿pasó el tiempo o es un error?)');subj.attrs[k]=v});
+   if(/\b(murio|muere|fallecio|fue asesinad[oa]|perecio)\b/.test(ns))subj.dead=id}
+  if(ents.length>=2){const m=ns.match(new RegExp('\\bes\\s+(?:el|la|un|una)?\\s*('+REL+')\\s+(?:de|del)\\b')),m2=ns.match(/\bson\s+(hermanos|amigos|enemigos|rivales|aliados|primos|esposos)/),m3=ns.match(/\b(ama|odia|traiciona|mata|salva|persigue|protege|enfrenta|ayuda)\s+a\b/),k=m?m[1]:m2?m2[1]:m3?m3[1]:null;
+   if(k&&!S.rels.some(r=>r.a==ents[0].id&&r.b==ents[1].id&&r.k==k))S.rels.push({a:ents[0].id,b:ents[1].id,k,i:id})}
+  if(/secreto|misterio|desconoc|nadie sabe|descubr|profecia|oculto|promet|jur[oó]|\?/.test(ns))S.threads.push({t:s,id:rid()})});
+ if(!all.size)return st;
+ const wh=norm(t).match(WH),ev={id:rid(),title:t.slice(0,70),desc:t,who:[...all].map(e=>e.id),where:[...all].filter(e=>e.type=='lugar').map(e=>e.id),when:wh?wh[1]:'',src:id},ix=D&&D.v?S.evs.findIndex(x=>x.id==D.v):-1;if(ix>=0){if(D.same)ev.same=D.v;S.evs.splice(D.before?ix:ix+1,0,ev)}else S.evs.push(ev);st.ni=S.issues.length-st.ni;return st}
+function ambig(t){const qs=[],seen=new Set(),sents=t.split(/(?<=[.!?…])\s+|\n+/).map(s=>s.trim()).filter(Boolean),mids=new Set(),tk=x=>norm(x).split(' ').filter(w=>w.length>2&&!STOP.has(w));
+ sents.forEach(s=>{for(const m of s.matchAll(CAP))if(m.index>0)m[0].split(' ').forEach(x=>mids.add(norm(x)))});
+ sents.forEach(s=>{for(const m of s.matchAll(CAP)){let w=m[0].split(/\s+/);while(w.length&&STOP.has(norm(w[0])))w.shift();while(w.length&&STOP.has(norm(w[w.length-1])))w.pop();if(!w.length)continue;
+  const name=w.join(' '),k=norm(name);if(seen.has(k)||S.ign.includes(k))continue;
+  const ns2=norm(s),gw=GW.test(ns2),ky=new RegExp('^(?:(?:el|la|los|las)\\s+)?'+k+'\\s+(?:es|era)\\s+(?:una?|la|el)\\s+(?:ciudad|pueblo|aldea|provincia|region|localidad|zona|capital|villa)').test(ns2),lg=gw||ky;if(w.length==1&&m.index==0&&!mids.has(k)&&!lg&&!S.ents.some(e=>tk(e.name).includes(k)))continue;
+  if(S.ents.some(e=>norm(e.name)==k||e.aliases.some(a=>norm(a)==k)))continue;
+  const a=tk(name),c=S.ents.filter(e=>{const b=tk(e.name);return(a.length==1||b.length==1)&&a.some(x=>b.includes(x))});
+  if(c.length)seen.add(k),qs.push({kind:'e',k,name,s,cands:c.map(e=>e.id)});else{const ty=guess(name,norm(s.slice(0,m.index)));if(ty=='lugar'||(lg&&ty=='personaje'&&!PERS.test(ns2)))seen.add(k),qs.push({kind:'g',k,name,s,pre:inf(s),lug:ty=='lugar'||lg})}}});
+ const w=norm(t).match(WH);if(w&&S.evs.length){const same=/ano \d/.test(w[1])&&S.evs.find(e=>e.when==w[1]);
+  if(same)qs.push({kind:'d',mode:'same',w:w[1],ref:same.id});else if(/antes|atras|despues|siguiente|esa noche|hace/.test(w[1]))qs.push({kind:'d',mode:'rel',w:w[1],before:/antes|atras/.test(w[1])})}
+ return qs}
+function proc(){const t=$('#idea').value.trim();if(!t)return;const qs=ambig(t);if(qs.length){PQ={t,qs};draw()}else fin(t,{},null)}
+function go(){const C={},G={};let D=null;PQ.qs.forEach((x,i)=>{if(x.kind=='g'){if($('#g'+i+'t').value=='1'){const o={};['rel','cli','veg','agua'].forEach(k=>{const v=$('#g'+i+k).value;if(v)o[k]=v});G[x.k]=o}return}const v=$('#q'+i).value;
+ if(x.kind=='e'){if(v=='new')C[x.k]='new:'+($('#n'+i).value.trim()||x.name);else{C[x.k]=v;if(x.cands.length==1){const e=byId(v);if(x.name.split(' ').length>e.name.split(' ').length){e.aliases.push(e.name);e.name=x.name}else if(!e.aliases.includes(x.name))e.aliases.push(x.name)}}}
+ else if(v)D={v,same:x.mode=='same',before:!!x.before}});const t=PQ.t;PQ=null;fin(t,C,D,G)}
+function fin(t,C,D,G){UNDO=JSON.stringify(S);CH=C;GEO=G||{};const r=analyze(t,D);CH={};GEO={};S.ideas.push({id:Date.now(),t});save();msg='Listo: '+r.ne+' elementos nuevos, '+r.nf+' datos, '+r.ni+' avisos.';draw()}
+function undo(){S=JSON.parse(UNDO);UNDO=null;save();msg='Deshecho.';draw()}
+function rel(e){const m={};S.ents.forEach(o=>{if(o!==e&&o.ap.some(i=>e.ap.includes(i)))m[o.id]=o.name});return Object.values(m)}
+const mv=(i,d)=>{const j=i+d;if(j<0||j>=S.evs.length)return;[S.evs[i],S.evs[j]]=[S.evs[j],S.evs[i]];save();draw()};
+function pick(f,kind,id){if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const M=kind=='m'?1000:320,k=Math.min(1,M/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);const u=c.toDataURL('image/jpeg',.7);if(kind=='m')S.map.img=u;else byId(id).img=u;save();draw()};im.src=r.result};r.readAsDataURL(f)}
+function merge(a,b){const A=byId(a),B=byId(b);if(!B||!confirm('¿Unir "'+A.name+'" dentro de "'+B.name+'"?'))return;B.aliases.push(A.name,...A.aliases);B.facts.push(...A.facts);B.ap=[...new Set([...B.ap,...A.ap])];B.attrs=Object.assign({},A.attrs,B.attrs);
+ S.rels.forEach(r=>{if(r.a==a)r.a=b;if(r.b==a)r.b=b});S.rels=S.rels.filter(r=>r.a!=r.b);S.evs.forEach(v=>v.who=[...new Set(v.who.map(x=>x==a?b:x))]);S.map.pins.forEach(p=>{if(p.e==a)p.e=b});S.ents.forEach(e=>{if(e.par==a)e.par=b;if(e.at==a)e.at=b});S.routes.forEach(r=>{if(r.a==a)r.a=b;if(r.b==a)r.b=b});S.routes=S.routes.filter(r=>r.a!=r.b);if(A.par&&!B.par&&A.par!=b)B.par=A.par;S.ents=S.ents.filter(e=>e.id!=a);save();draw()}
+const goto=id=>wk(id);
+function mapClick(ev){if(!pinE)return alert('Elegí primero un lugar');const r=ev.currentTarget.getBoundingClientRect();S.map.pins=S.map.pins.filter(p=>p.e!=pinE);S.map.pins.push({e:pinE,x:(ev.clientX-r.left)/r.width*100,y:(ev.clientY-r.top)/r.height*100});save();draw()}
+function guide(){const g=[],P=S.ents.filter(e=>e.type=='personaje').sort((a,b)=>b.ap.length-a.ap.length),n=S.ideas.length;
+ if(!n)return['Empezá contándome ideas sueltas en la pestaña Ideas: nombres, lugares, hechos. Yo organizo todo.'];
+ if(!S.end)g.push('Todavía no definiste el final ni a dónde querés llegar. Aunque sea una intuición: ¿termina bien, mal o agridulce? ¿Quién cambia más?');
+ else{const m=new Set();for(const x of S.end.matchAll(CAP)){const nm=x[0];if(!find(nm)&&!STOP.has(norm(nm)))m.add(nm)}if(m.size)g.push('Tu final nombra "'+[...m].join('", "')+'", que todavía no existe en tu universo: ¿hay que presentarlo antes?')}
+ const p=P[0];if(p&&p.facts.length<3)g.push('¿Qué quiere '+p.name+' (deseo), qué se lo impide (obstáculo) y qué es lo que más teme? Contámelo y lo registro.');
+ if(P.length&&!S.rels.some(r=>/enemig|rival|odia|mata|enfrenta|persigue|traiciona/.test(r.k)))g.push('No hay un antagonista o conflicto claro registrado. ¿Quién o qué se opone al protagonista?');
+ S.ents.filter(e=>e.facts.length==1&&e.type!='otro').slice(0,3).forEach(e=>g.push('Tenés un solo dato de '+e.name+' ('+e.type+'). ¿Qué más sabés de él/ella/eso?'));
+ for(let i=0;i<Math.min(P.length,4);i++)for(let j=i+1;j<Math.min(P.length,4);j++)if(!P[i].ap.some(x=>P[j].ap.includes(x)))g.push(P[i].name+' y '+P[j].name+' nunca coinciden en una escena: ¿deberían cruzarse? ¿cuándo?');
+ S.ents.filter(e=>e.type=='poder').forEach(e=>g.push('¿Cuál es el costo y el límite de '+e.name+'? Un poder sin límites mata la tensión.'));
+ S.ents.filter(e=>e.type=='lugar'&&!Object.keys(e.geo||{}).length).slice(0,2).forEach(e=>g.push('¿Cómo es el ambiente de '+e.name+'? (relieve, clima, vegetación, agua). Lo podés completar desde el mapa.'));
+ const LP=S.ents.filter(e=>e.type=='lugar'&&!e.par&&!kids(e.id).length);if(LP.length>1)LP.slice(0,3).forEach(e=>g.push('¿Dónde queda '+e.name+'? ¿Está dentro de una región? Decímelo así: "'+e.name+' está en …".'));
+ P.filter(e=>!e.at).slice(0,2).forEach(e=>g.push('¿Dónde está '+e.name+' ahora? Todavía no sé su ubicación.'));
+ S.ents.forEach((a,i)=>S.ents.slice(i+1).forEach(b=>{const x=a.name.split(' '),y=b.name.split(' ');if(a.type==b.type&&(x.length==1||y.length==1)&&x.some(w=>y.includes(w)))g.push('¿"'+a.name+'" y "'+b.name+'" son el mismo? Si sí, unílos desde su ficha.')}));
+ g.push(n<5?'Fase semilla: definí protagonista, deseo, mundo y tono.':n<15?'Fase estructura: ¿ya tenés incidente incitador, primer punto de giro y punto medio?':'Fase revisión: chequeá el ritmo de los 3 actos y que cada hilo abierto se pague.');
+ const R=['Chéjov: si mostrás un arma en el acto 1, que dispare en el 3.','Mostrar, no contar: cambiá una explicación por una escena con acción.','Giro: invertí una expectativa que tú mismo plantaste.','Apuestas: ¿qué pierde el protagonista si fracasa? Hacelo concreto y personal.','Anticipación (foreshadowing): sembrá hoy lo que revelás en el final.','Cada personaje debe querer algo en cada escena, aunque sea pequeño.','Un secreto revelado en el momento más incómodo vale doble.'];
+ g.push('Recurso del día: '+R[n%R.length]);return g}
+function biblia(){let m='# Biblia de la novela\n\nFinal: '+(S.end||'(sin definir)')+'\n\n';S.ents.forEach(e=>{m+='## '+e.name+' ('+e.type+')\n'+(e.aliases.length?'Alias: '+e.aliases.join(', ')+'\n':'')+Object.entries(e.attrs).map(([k,v])=>'- '+k+': '+v).join('\n')+'\n'+e.facts.map(f=>'- '+f.t).join('\n')+'\n'+S.rels.filter(r=>r.a==e.id||r.b==e.id).map(r=>'- '+byId(r.a).name+' → '+r.k+' → '+byId(r.b).name).join('\n')+'\n\n'});m+='## Línea de tiempo\n'+S.evs.map((v,i)=>(i+1)+'. '+v.when+' '+v.title).join('\n');dl('biblia.md',m,'text/markdown')}
+function dl(n,c,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=n;a.click()}
+async function imp(f){if(!f)return;try{S=Object.assign(S,JSON.parse(await f.text()));save();draw()}catch(e){alert('Archivo inválido')}}
+function net(){const E=S.ents.slice().sort((a,b)=>b.ap.length-a.ap.length).slice(0,14),N=E.length,P={};if(N<2)return '<div class="mu">Necesito al menos 2 elementos.</div>';
+ E.forEach((e,i)=>{const a=i/N*6.283-1.57;P[e.id]=[170+125*Math.cos(a),170+125*Math.sin(a)]});let s='<svg viewBox="0 0 340 340" style="width:100%">';
+ E.forEach((a,i)=>E.slice(i+1).forEach(b=>{if(a.type=='personaje'&&b.type=='personaje'&&a.ap.some(x=>b.ap.includes(x)))s+=`<line x1="${P[a.id][0]}" y1="${P[a.id][1]}" x2="${P[b.id][0]}" y2="${P[b.id][1]}" stroke="#888" stroke-opacity=".3" stroke-dasharray="3"/>`}));
+ S.rels.forEach(r=>{if(!P[r.a]||!P[r.b])return;const[a,b]=[P[r.a],P[r.b]];s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#6b4ce6" stroke-width="2"/><text x="${(a[0]+b[0])/2}" y="${(a[1]+b[1])/2}" font-size="8" fill="currentColor" text-anchor="middle">${esc(r.k)}</text>`});
+ E.forEach(e=>{const[x,y]=P[e.id];s+=`<g onclick="goto('${e.id}')"><circle cx="${x}" cy="${y}" r="11" fill="${COL[e.type]}"/><text x="${x}" y="${y+22}" font-size="9" fill="currentColor" text-anchor="middle">${esc(e.name.slice(0,14))}</text></g>`});
+ return s+'</svg><div class="mu">Línea llena = relación detectada ("es hermano de", "odia a"…). Punteada = coinciden en escenas.</div>'}
+const anc=e=>{const a=[];let x=e;while(x&&x.par&&a.length<20){x=byId(x.par);if(x)a.push(x)}return a};
+const kids=id=>S.ents.filter(e=>e.type=='lugar'&&(e.par&&byId(e.par)?e.par:'')==id);
+function setPar(c,p){if(c===p||anc(p).includes(c))return;if(c.par&&c.par!=p.id){const o=byId(c.par);if(o&&anc(p).includes(o)){c.par=p.id;return}if(anc(c).includes(p))return;addIssue('contradiccion',c.name+' estaba dentro de '+(o?o.name:'otro lugar')+' y ahora decís que está en '+p.name+'. ¿Son lugares distintos?');return}c.par=p.id}
+function trip(a,b,ns){if(!a||!b||a==b)return;const m=ns.match(/(?:en|durante|tardo|tardaron|a)\s+(\d+)\s+(dias|horas|semanas|meses)/),t=m?m[1]+' '+m[2]:'',r=S.routes.find(x=>(x.a==a.id&&x.b==b.id)||(x.a==b.id&&x.b==a.id));
+ if(!r)S.routes.push({a:a.id,b:b.id,t});else if(t&&r.t&&r.t!=t)addIssue('contradiccion','El trayecto '+a.name+' ↔ '+b.name+' figuraba de '+r.t+' y ahora dice '+t+'.');else if(t&&!r.t)r.t=t}
+function lay(id,x,y,w,h,out,d){const k=kids(id);if(!k.length)return;const c=Math.ceil(Math.sqrt(k.length)),r=Math.ceil(k.length/c),cw=w/c,ch=h/r;k.forEach((e,i)=>{const cx=x+(i%c)*cw,cy=y+Math.floor(i/c)*ch;out.push({e,x:cx+3,y:cy+3,w:cw-6,h:ch-6,d});if(d<1)lay(e.id,cx+3,cy+14,cw-6,ch-17,out,d+1)})}
+const mp=id=>{sel=id;draw()};
+function chip(e,f='wk'){return `<button class="s" onclick="${f}('${e.id}')" style="border-color:${COL[e.type]}">${esc(e.name)}</button>`}
+const GK={rel:['montañas','valle','llanura','meseta','costa','isla','colinas'],cli:['árido','templado','cálido','húmedo','frío','nevado'],veg:['desierto','monte','bosque','selva','pastizal','cultivos'],agua:['río','lago','mar','escasa']},GL={rel:'Relieve',cli:'Clima',veg:'Vegetación',agua:'Agua'};
+const GW=/montan|clima|arid|desiert|bosque|selva|valle|sierra|region|provincia|llanura|cordillera|meseta|costa/,PERS=/\b(dijo|murio|nacio|hermano|hermana|padre|madre|amigo|amiga|enemig|odia|ama|mata|salva|rey|reina)\b/;
+const hh=(a,i)=>{let x=0;for(const c of a+i)x=(x*31+c.charCodeAt(0))>>>0;return(x%1000)/1000};
+function inf(t){t=norm(t);const g={},m=(k,r,v)=>{if(!g[k]&&r.test(t))g[k]=v};
+ m('rel',/cordillera|montan|sierra|cerro|andes/,'montañas');m('rel',/valle/,'valle');m('rel',/llanura|pampa|llano|planicie/,'llanura');m('rel',/meseta|altiplano/,'meseta');m('rel',/costa|playa|litoral/,'costa');m('rel',/\bisla/,'isla');m('rel',/colina|loma/,'colinas');
+ m('veg',/arbust|jarilla|matorral|cardon|\bmonte\b/,'monte');m('veg',/selva|jungla/,'selva');if(!/(sin|no tiene|no hay|ni)\s+bosque/.test(t))m('veg',/bosque/,'bosque');m('veg',/desierto|duna/,'desierto');m('veg',/pastiz|prado|pampa/,'pastizal');m('veg',/cultiv|vinedo|chacra/,'cultivos');
+ m('cli',/arid|seco|sequia/,'árido');m('cli',/nieve|nevad|glaci/,'nevado');m('cli',/frio|helad/,'frío');m('cli',/humed|lluvios|tropical/,'húmedo');m('cli',/calid|caluros/,'cálido');m('cli',/templad/,'templado');
+ m('agua',/sin agua|poca agua|escasa agua|sequia/,'escasa');m('agua',/\brios?\b|arroyo/,'río');m('agua',/lago|laguna/,'lago');m('agua',/\bmar\b|oceano/,'mar');return g}
+const setGeo=(id,k,v)=>{const e=byId(id);e.geo=e.geo||{};if(v)e.geo[k]=v;else delete e.geo[k];save();draw()};
+const GQ=(x,i)=>`<div class="card">«${esc(x.name)}»: ¿es un lugar? Si sí, contame cómo es su ambiente (lo que sepas):<select id="g${i}t"><option value="1" ${x.lug?'selected':''}>Sí, es un lugar</option><option value="0" ${x.lug?'':'selected'}>No es un lugar</option></select>${Object.keys(GL).map(k=>`<select id="g${i}${k}"><option value="">${GL[k]}…</option>${GK[k].map(v=>`<option ${x.pre[k]==v?'selected':''}>${v}</option>`).join('')}</select>`).join('')}</div>`;
+function terrain(o){const e=o.e,g=e.geo||{},n=kids(e.id).length,id=e.id,cx=o.x+o.w/2,cy=o.y+o.h/2,rx=Math.max(8,o.w/2-3),ry=Math.max(8,o.h/2-3),leaf=!n&&o.d>=1&&/^(ciudad|pueblo|aldea|castillo|torre|templo|puerto)$/.test(e.kind||''),c=S.evs.filter(v=>(v.where||[]).includes(id)).length,sl=sel==id;
+ const lab=`<text x="${cx}" y="${leaf?cy+13:o.y+12}" font-size="10" text-anchor="middle" fill="#222" style="paint-order:stroke;stroke:#fff;stroke-width:2.5px">${esc(e.name.slice(0,18))}${n&&o.d==1?' ▸':''}${c?' ·'+c:''}</text>`;
+ if(leaf)return `<g onclick="mp('${id}')"><circle cx="${cx}" cy="${cy}" r="${sl?6:4.5}" fill="${e.kind=='ciudad'?'#c0392b':'#7a4b2a'}" stroke="#fff" stroke-width="1.5"/>${lab}</g>`;
+ const P=[...Array(12)].map((_,i)=>{const a=i/12*6.283,f=.8+.2*hh(id,i);return[cx+Math.cos(a)*rx*f,cy+Math.sin(a)*ry*f]}),mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];let d='M'+mid(P[11],P[0]).join(',');P.forEach((p,i)=>{d+=`Q${p.join(',')} ${mid(p,P[(i+1)%12]).join(',')}`});d+='Z';
+ const fill=g.cli=='nevado'?'#f1f5f8':({desierto:'#ead9a8',monte:'#d3c68c',bosque:'#8fc084',selva:'#5fa56a',pastizal:'#c6dc8e',cultivos:'#e0e2a0'}[g.veg]||(g.cli=='árido'?'#e8d9ac':g.cli=='húmedo'?'#b9dca8':'#d7e8c8'));
+ let s=(g.rel=='costa'||g.rel=='isla'||g.agua=='mar')?`<path d="${d}" fill="none" stroke="#7fb2d6" stroke-width="6"/>`:'';
+ s+=`<path d="${d}" fill="${fill}" stroke="${sl?'#6b4ce6':'#7a6a4f'}" stroke-width="${sl?3:1.2}"/>`;
+ const cnt=Math.min(24,Math.round(rx*ry/160));
+ for(let i=0;i<cnt;i++){const a=hh(id,'a'+i)*6.283,q=Math.sqrt(hh(id,'r'+i))*.75,x=cx+Math.cos(a)*rx*q,y=cy+Math.sin(a)*ry*q;
+  s+=g.veg=='monte'?`<circle cx="${x}" cy="${y}" r="2" fill="#7d8a45"/>`:g.veg=='bosque'||g.veg=='selva'?`<path d="M${x},${y-4}l-3,6h6z" fill="${g.veg=='selva'?'#1f7a3d':'#2f6f3a'}"/>`:g.veg=='desierto'?`<circle cx="${x}" cy="${y}" r="1" fill="#b9985a"/>`:g.veg=='pastizal'?`<path d="M${x},${y}v-3m2,3v-2" stroke="#6b8e23"/>`:g.veg=='cultivos'?`<path d="M${x},${y}h6" stroke="#a9a24a"/>`:''}
+ if(g.rel=='montañas'||g.rel=='valle'||g.rel=='colinas'){const k=g.rel=='colinas'?8:14,sz=Math.max(4,Math.min(9,Math.min(rx,ry)*.16));for(let i=0;i<k;i++){const a=i/k*6.283+hh(id,'m'+i)*.3,x=cx+Math.cos(a)*rx*.93,y=cy+Math.sin(a)*ry*.93;s+=`<path d="M${x-sz},${y+sz*.8}L${x},${y-sz}L${x+sz},${y+sz*.8}z" fill="${g.rel=='colinas'?'#a99a6e':'#8d7b68'}" stroke="#5b4b3a" stroke-width=".8"/>`}}
+ if(g.agua=='río'||g.rel=='valle')s+=`<path d="M${cx-rx*.3},${cy-ry*.7}Q${cx+rx*.4},${cy-ry*.2} ${cx},${cy}T${cx+rx*.2},${cy+ry*.7}" fill="none" stroke="#4a90c2" stroke-width="2"/>`;
+ if(g.agua=='lago')s+=`<ellipse cx="${cx+rx*.3}" cy="${cy+ry*.25}" rx="${rx*.2}" ry="${ry*.14}" fill="#7ab6e0"/>`;
+ return `<g onclick="mp('${id}')">${s}${lab}</g>`}
+function placePanel(e){const k=kids(e.id),ids=[e.id,...k.map(c=>c.id)],ev=S.evs.filter(v=>(v.where||[]).some(w=>ids.includes(w))),ch=[...new Set(ev.flatMap(v=>v.who).map(byId).filter(x=>x&&x.type=='personaje'))];
+ return `<div class="card"><b>${esc(e.name)}</b> <span class="mu">${esc(e.kind||'lugar')}${anc(e).length?' · en '+esc(anc(e).map(a=>a.name).join(' › ')):''}</span><div>${esc(e.facts[0]?.t||'')}</div>
+ ${k.length?'<div class="mu">Contiene:</div>'+k.map(c=>chip(c,'mp')).join(''):''}${ch.length?'<div class="mu">Personajes que pasan por acá:</div>'+ch.map(c=>chip(c)).join(''):''}<div class="mu">Ambiente: ${esc(Object.values(e.geo||{}).join(' · ')||'sin definir (completalo acá)')}</div>${Object.keys(GL).map(k=>`<select onchange="setGeo('${e.id}','${k}',this.value)"><option value="">${GL[k]}…</option>${GK[k].map(v=>`<option ${e.geo?.[k]==v?'selected':''}>${v}</option>`).join('')}</select>`).join('')}<div class="mu">${ev.length} hecho(s) en este lugar</div>
+ ${k.length?`<button class="s" onclick="mroot='${e.id}';sel='';draw()">Entrar ▸</button>`:''}<button class="s" onclick="wk('${e.id}')">Ver ficha</button>
+ <select onchange="byId('${e.id}').par=this.value;save();draw()"><option value="">Está dentro de: (nada, es raíz)</option>${S.ents.filter(o=>o.type=='lugar'&&o!=e&&!anc(o).includes(e)).map(o=>`<option value="${o.id}" ${e.par==o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select></div>`}
+const CATN={personaje:'Personajes',lugar:'Lugares',poder:'Poderes y magia',objeto:'Objetos',faccion:'Facciones',otro:'Otros',regla:'Reglas del mundo'};
+const RULE=/limite|costo|cuesta|solo puede|solo pueden|no puede|no pueden|prohibid|requiere|necesita|debilidad|a cambio|nunca|siempre|\bley\b|regla/;
+const rules=()=>{const r=[];S.ents.forEach(e=>e.facts.forEach(f=>{if(e.type=='poder'||RULE.test(norm(f.t)))r.push({e,t:f.t,name:e.name})}));return r};
+const wk=id=>{tab='world';WS.push(id);draw()},wcat=c=>{tab='world';WS=[c];draw()},ed=id=>{tab='ents';q=byId(id).name;draw()};
+function worldView(){const c=WS[WS.length-1];let h='';
+ const bc='<div class="mu"><a onclick="WS=[];draw()">Mundo</a>'+WS.map((x,i)=>' › <a onclick="WS=WS.slice(0,'+(i+1)+');draw()">'+esc(CATN[x]||byId(x)?.name||'?')+'</a>').join('')+'</div>';
+ if(!c){h=Object.keys(CATN).map(k=>{const l=k=='regla'?rules():S.ents.filter(e=>e.type==k);return l.length?`<div class="card" onclick="wcat('${k}')"><b style="color:${COL[k]||'inherit'}">${CATN[k]} (${l.length})</b><div class="mu">${esc(l.slice(0,4).map(x=>x.name).join(', '))}${l.length>4?'…':''}</div></div>`:''}).join('');
+  const P=S.ents.filter(e=>e.type=='personaje').sort((a,b)=>b.ap.length-a.ap.length)[0];
+  h='<button class="s" onclick="tab=&quot;net&quot;;draw()">Ver red de personajes</button>'+(P?`<div class="card">Personaje central: <b>${esc(P.name)}</b> (${P.ap.length} ideas)</div>`:'')+(S.end?`<div class="card">Final: ${esc(S.end)}</div>`:'')+(h||'<div class="mu">Todavía no hay nada. Cargá ideas y acá se arma el resumen de tu mundo, que podés ir abriendo de a poco.</div>')}
+ else if(CATN[c]){h=c=='regla'?(rules().map(x=>`<div class="card">${esc(x.t)}<div>${chip(x.e)}</div></div>`).join('')||'<div class="mu">Aún no hay reglas. Contame límites, costos o prohibiciones.</div>'):S.ents.filter(e=>e.type==c).map(e=>`<div class="card" onclick="wk('${e.id}')"><b>${esc(e.name)}</b>${e.kind?` <span class="mu">${esc(e.kind)}</span>`:''}<div class="mu">${esc((e.facts[0]?.t||'sin datos todavía').slice(0,90))}</div></div>`).join('')}
+ else{const e=byId(c);if(!e)return bc+'<div class="mu">No existe.</div>';const ev=S.evs.filter(v=>v.who.includes(e.id)),R=e.facts.filter(f=>e.type=='poder'||RULE.test(norm(f.t))),pl=[...new Set(ev.flatMap(v=>v.where||[]))].map(byId).filter(x=>x&&x!=e),rl=S.rels.filter(r=>r.a==e.id||r.b==e.id);
+  h=`<div class="card"><b>${esc(e.name)}</b> <span style="color:${COL[e.type]}">${e.type}${e.kind?' · '+esc(e.kind):''}</span>${e.dead?' ✝':''}${e.img?`<br><img class="t" src="${e.img}">`:''}${e.geo&&Object.keys(e.geo).length?'<div class="mu">Ambiente: '+esc(Object.values(e.geo).join(' · '))+'</div>':''}<div>${esc(e.facts.slice(0,2).map(f=>f.t).join(' '))}</div>${Object.entries(e.attrs).map(([k,v])=>`<div><b>${esc(k)}:</b> ${esc(v)}</div>`).join('')}</div>`
+  +(anc(e).length?'<div class="mu">Ubicación:</div>'+anc(e).map(a=>chip(a)).join(''):'')+(e.type=='personaje'&&byId(e.at)?'<div class="mu">Última ubicación conocida:</div>'+chip(byId(e.at)):'')
+  +(R.length?'<h3>Reglas</h3>'+R.map(f=>`<div class="card">${esc(f.t)}</div>`).join(''):'')+(kids(e.id).length?'<h3>Contiene</h3>'+kids(e.id).map(x=>chip(x)).join(''):'')
+  +(rl.length?'<h3>Relaciones</h3>'+rl.map(r=>{const o=byId(r.a==e.id?r.b:r.a);return o?`<div>${esc(r.a==e.id?r.k+' de':'tiene como '+r.k+' a')} ${chip(o)}</div>`:''}).join(''):'')
+  +(pl.length?'<h3>Lugares donde aparece</h3>'+pl.map(x=>chip(x)).join(''):'')+(rel(e).length?'<h3>Se cruza con</h3>'+S.ents.filter(o=>o!==e&&o.ap.some(i=>e.ap.includes(i))).map(x=>chip(x)).join(''):'')
+  +`<details class="card"><summary>Todos los datos (${e.facts.length})</summary><ul>${e.facts.map(f=>`<li>${esc(f.t)}</li>`).join('')}</ul></details>`+(ev.length?`<details class="card"><summary>Hechos (${ev.length})</summary>${ev.map(v=>`<div class="mu">• ${esc(v.title)}</div>`).join('')}</details>`:'')
+  +`<button class="s" onclick="WS.pop();draw()">← Atrás</button><button class="s" onclick="ed('${e.id}')">Editar ficha</button>`+(e.type=='lugar'?`<button class="s" onclick="mroot='${e.par||''}';sel='${e.id}';mm='auto';tab='map';draw()">Ver en el mapa</button>`:'')}
+ return bc+h}
+function PJH(){return `<label class="mu">Novela actual</label><select onchange="sw(this.value)">${PJ.list.map(p=>`<option value="${p.id}" ${p.id==PJ.cur?'selected':''}>${esc(p.name)}</option>`).join('')}</select><button class="s" onclick="pjNew()">+ Nueva novela</button><button class="s" onclick="pjRen()">Renombrar</button><button class="s" onclick="pjDel()">Borrar</button><hr>`}
+function sw(id){save();PJ.cur=id;pjSave();S=load();tab='ideas';WS=[];mroot='';sel='';UNDO=null;msg='';CPT='';REV=null;draw()}
+function pjNew(){const n=prompt('Nombre de la novela');if(!n)return;const id='p'+rid();PJ.list.push({id,name:n});sw(id)}
+function pjRen(){const n=prompt('Nuevo nombre',cur().name);if(n){cur().name=n;pjSave();draw()}}
+function pjDel(){if(PJ.list.length<2)return alert('Tiene que quedar al menos una novela');if(!confirm('¿Borrar esta novela y todos sus datos?'))return;localStorage.removeItem('nv_'+PJ.cur);PJ.list=PJ.list.filter(p=>p.id!=PJ.cur);PJ.cur=PJ.list[0].id;pjSave();S=load();tab='ideas';draw()}
+let CPT='',REV=null,CT=0;
+const wc=t=>(t||'').trim()?t.trim().split(/\s+/).length:0;
+function routesOv(){const l=S.routes.map(r=>{const a=S.map.pins.find(p=>p.e==r.a),b=S.map.pins.find(p=>p.e==r.b);return a&&b?`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#d6336c" stroke-width=".6" stroke-dasharray="2"/>`:''}).join('');return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">${l}</svg>`}
+function autoPin(){const out=[];lay('',0,0,340,300,out,0);out.forEach(o=>{if(o.e.type=='lugar'&&!S.map.pins.some(p=>p.e==o.e.id))S.map.pins.push({e:o.e.id,x:(o.x+o.w/2)/340*100,y:(o.y+o.h/2)/300*100})});save();draw()}
+function capNew(){const id=rid();S.caps.push({id,t:'Capítulo '+(S.caps.length+1),txt:'',st:'borrador',pov:'',lug:''});save();CPT=id;REV=null;draw()}
+const capSet=(i,k,v)=>{S.caps[i][k]=v;save();draw()};
+function capIn(i,v){S.caps[i].txt=v;clearTimeout(CT);CT=setTimeout(save,800);$('#wcn').textContent=wc(v)+' palabras'}
+function capMv(i,d){const j=i+d;if(j<0||j>=S.caps.length)return;[S.caps[i],S.caps[j]]=[S.caps[j],S.caps[i]];save();draw()}
+function capDel(i){if(confirm('¿Borrar este capítulo?')){S.caps.splice(i,1);CPT='';save();draw()}}
+function revisar(i){const c=S.caps[i],bak=JSON.stringify(S),nt=norm(c.txt),pres=S.ents.filter(e=>[e.name,...e.aliases].some(n=>nt.includes(norm(n)))).map(e=>e.id),e0=new Set(S.ents.map(e=>e.id)),n0=S.issues.length;
+ analyze(c.txt,null);REV={c:c.id,pres,iss:S.issues.slice(n0).filter(x=>x.level!='redundancia'),nuevos:S.ents.filter(e=>!e0.has(e.id)).map(e=>e.name)};S=JSON.parse(bak);draw()}
+function cargar(i){const t=S.caps[i].txt.trim();if(!t)return;const qs=ambig(t);tab='ideas';if(qs.length){PQ={t,qs};draw()}else fin(t,{},null,{})}
+function manu(){dl('manuscrito.md',S.caps.map(c=>'# '+c.t+'\n\n'+c.txt).join('\n\n'),'text/markdown')}
+function writeView(){const cs=S.caps,o=cs.find(c=>c.id==CPT);
+ if(!o)return `<button class="b" onclick="capNew()">+ Capítulo</button><div class="mu">${cs.length} capítulo(s) · ${cs.reduce((a,c)=>a+wc(c.txt),0)} palabras</div>`+(cs.map(c=>`<div class="card" onclick="CPT='${c.id}';REV=null;draw()"><b>${esc(c.t)}</b> <span class="mu">${c.st} · ${wc(c.txt)} palabras</span><div class="mu">${esc((c.txt||'').slice(0,90))}</div></div>`).join('')||'<div class="mu">Escribí tus capítulos acá. Después los podés revisar contra tu universo para detectar contradicciones.</div>');
+ const i=cs.indexOf(o),opt=(l,v)=>l.map(x=>`<option value="${x.id}" ${x.id==v?'selected':''}>${esc(x.name)}</option>`).join('');
+ return `<button class="s" onclick="CPT='';draw()">← Capítulos</button><input value="${esc(o.t)}" onchange="capSet(${i},'t',this.value)">
+ <select onchange="capSet(${i},'st',this.value)">${['borrador','revisión','final'].map(x=>`<option ${x==o.st?'selected':''}>${x}</option>`).join('')}</select>
+ <select onchange="capSet(${i},'pov',this.value)"><option value="">Punto de vista (personaje)…</option>${opt(S.ents.filter(e=>e.type=='personaje'),o.pov)}</select>
+ <select onchange="capSet(${i},'lug',this.value)"><option value="">Dónde transcurre…</option>${opt(S.ents.filter(e=>e.type=='lugar'),o.lug)}</select>
+ <textarea rows="14" oninput="capIn(${i},this.value)" placeholder="Escribí el capítulo…">${esc(o.txt)}</textarea><div class="mu" id="wcn">${wc(o.txt)} palabras</div>
+ <button class="b" onclick="revisar(${i})">Revisar contra mi universo</button><button class="b" onclick="cargar(${i})">Cargar en mi universo</button>
+ ${REV&&REV.c==o.id?`<div class="card"><b>Revisión</b><div class="mu">Aparecen:</div>${REV.pres.map(id=>byId(id)?chip(byId(id)):'').join('')||'<div class="mu">nadie conocido</div>'}${REV.nuevos.length?`<div>Nombres que no están en tu universo: ${esc(REV.nuevos.join(', '))}</div>`:''}${REV.iss.length?REV.iss.map(x=>`<div class="${x.level=='contradiccion'?'bad':''}">• ${esc(x.text)}</div>`).join(''):'<div>Sin contradicciones con lo que cargaste ✔</div>'}</div>`:''}
+ <button class="s" onclick="capMv(${i},-1)">↑</button><button class="s" onclick="capMv(${i},1)">↓</button><button class="s" onclick="capDel(${i})">Borrar capítulo</button>`}
+function draw(){$('#hd').textContent='📖 '+cur().name;
+ $('#nav').innerHTML=Object.entries(TABS).map(([k,v])=>`<button class="${k==tab?'on':''}" onclick="tab='${k}';draw()">${v}</button>`).join('');let h='';
+ if(tab=='ideas'){const keep=$('#idea')?.value||DR;DR='';
+  if(PQ){$('#v').innerHTML='<div class="card"><b>Antes de guardar, confirmame esto para no mezclar cosas:</b></div>'+PQ.qs.map((x,i)=>x.kind=='g'?GQ(x,i):x.kind=='e'?`<div class="card">En «${esc(x.s.slice(0,90))}», ¿<b>${esc(x.name)}</b> es…?<select id="q${i}" onchange="$('#n${i}').style.display=this.value=='new'?'block':'none'">${x.cands.map(id=>{const e=byId(id);return `<option value="${id}">${esc(e.name)} (${e.type}) ${esc((e.facts[0]?.t||'').slice(0,45))}</option>`}).join('')}<option value="new">Otra distinta (nueva)</option></select><input id="n${i}" style="display:none" placeholder="Nombre completo o apodo (opcional)"></div>`:`<div class="card">${x.mode=='same'?'La fecha «'+esc(x.w)+'» ya apareció. ¿Es el mismo momento que…?':'«'+esc(x.w)+'»: ¿respecto a qué hecho?'}<select id="q${i}">${x.mode=='same'?'':'<option value="">No sé / ninguno</option>'}${S.evs.map(v=>`<option value="${v.id}" ${v.id==x.ref?'selected':''}>${esc(v.title.slice(0,50))}</option>`).join('')}${x.mode=='same'?'<option value="">Es otro momento</option>':''}</select></div>`).join('')+'<button class="b" onclick="go()">Continuar</button><button class="s" onclick="DR=PQ.t;PQ=null;draw()">Cancelar</button>';return}
+  h=`<textarea id="idea" rows="6" placeholder="Contame una idea suelta. Ej: Ana Torres es la hermana de Marco. Vive en el Reino de Valdor y tiene ojos verdes."></textarea><button class="b" onclick="proc()">Analizar y guardar</button><div class="mu">${esc(msg)} ${UNDO?'<button class="s" onclick="undo()">Deshacer última idea</button>':''}</div><div class="mu">${S.ents.length} fichas · ${S.ideas.length} ideas · ${S.evs.length} hechos</div><h3>Avisos</h3>`+(S.issues.length?S.issues.map((x,i)=>`<div class="card"><b class="${x.level=='contradiccion'?'bad':''}">${esc(x.level)}</b><br>${esc(x.text)}<br><button class="s" onclick="S.issues.splice(${i},1);save();draw()">Resuelto</button></div>`).join(''):'<div class="mu">Sin avisos.</div>')+'<h3>Ideas guardadas</h3>'+S.ideas.slice().reverse().map(x=>`<div class="card mu">${esc(x.t)}</div>`).join('');
+  $('#v').innerHTML=h;$('#idea').value=keep;return}
+ if(tab=='ents'){h=`<button class="s" onclick="tab='world';draw()">← Mundo</button><input id="q" value="${esc(q)}" placeholder="Buscar…" onchange="q=this.value;draw()">`;const L=S.ents.filter(e=>!q||norm(e.name+e.aliases.join()+e.facts.map(f=>f.t).join()).includes(norm(q)));if(!L.length)h+='<div class="mu">Sin fichas.</div>';
+  T.forEach(t=>{const l=L.filter(e=>e.type==t);if(!l.length)return;h+=`<h3 style="color:${COL[t]}">${t} (${l.length})</h3>`;l.forEach(e=>{
+   h+=`<details class="card" ${q?'open':''}><summary>${esc(e.name)}${e.dead?' ✝':''}</summary>${e.aliases.length?`<div class="mu">También: ${esc(e.aliases.join(', '))}</div>`:''}
+   <input value="${esc(e.name)}" onchange="byId('${e.id}').name=this.value;save();draw()"><select onchange="byId('${e.id}').type=this.value;save();draw()">${T.map(x=>`<option ${x==e.type?'selected':''}>${x}</option>`).join('')}</select>
+   ${e.img?`<img class="t" src="${e.img}">`:''}<input type="file" accept="image/*" onchange="pick(this.files[0],'e','${e.id}')">
+   ${Object.entries(e.attrs).map(([k,v])=>`<div><b>${esc(k)}:</b> ${esc(v)}</div>`).join('')}
+   <ul>${e.facts.map((f,i)=>`<li>${esc(f.t)} <a onclick="byId('${e.id}').facts.splice(${i},1);save();draw()">✕</a></li>`).join('')}</ul>
+   ${S.rels.filter(r=>r.a==e.id||r.b==e.id).map(r=>`<div>🔗 ${esc(byId(r.a)?.name)} → <i>${esc(r.k)}</i> → ${esc(byId(r.b)?.name)}</div>`).join('')}
+   <div class="mu">En ${e.ap.length} idea(s). ${rel(e).length?'Se cruza con: '+esc(rel(e).join(', ')):''}</div>
+   <select onchange="merge('${e.id}',this.value)"><option value="">Unir con otro (es el mismo)…</option>${S.ents.filter(o=>o!=e).map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>
+   <button class="s" onclick="if(confirm('¿Borrar y no volver a detectar este nombre?')){S.ign.push(norm(byId('${e.id}').name));S.ents=S.ents.filter(o=>o.id!='${e.id}');save();draw()}">Borrar</button></details>`})})}
+ if(tab=='map'){h=`<button class="s" onclick="mm='auto';draw()">Mapa del mundo</button><button class="s" onclick="mm='img';draw()">Sobre una imagen</button>`;
+  if(mm=='auto'){const out=[];lay(mroot,0,0,340,300,out,0);let bc=[],x=byId(mroot);while(x){bc.unshift(x);x=byId(x.par)}
+   h+=`<div class="mu"><a onclick="mroot='';sel='';draw()">Mundo</a>${bc.map(b=>` › <a onclick="mroot='${b.id}';sel='';draw()">${esc(b.name)}</a>`).join('')}</div>`;
+   if(!out.length)h+='<div class="mu">Todavía no hay lugares acá. Contame cosas como "La Ciudad Roja está en el Reino de Valdor" y el mapa se arma solo.</div>';
+   else{const vis=id=>{let x=byId(id);while(x){const it=out.find(o=>o.e==x);if(it)return it;x=byId(x.par)}};let sv='<svg viewBox="0 0 340 300" style="width:100%;border-radius:10px"><rect width="340" height="300" fill="#bcd7ea"/>';
+    out.forEach(o=>{sv+=terrain(o)});
+    S.routes.forEach(r=>{const a=vis(r.a),b=vis(r.b);if(a&&b&&a!=b){const x1=a.x+a.w/2,y1=a.y+a.h/2,x2=b.x+b.w/2,y2=b.y+b.h/2;sv+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#d6336c" stroke-dasharray="4" pointer-events="none"/>${[a,b].some(z=>/montañas|valle/.test(z.e.geo?.rel||''))?`<path d="M${(x1+x2)/2-4},${(y1+y2)/2+10}l4,-9l4,9z" fill="#8d7b68"/>`:''}${r.t?`<text x="${(x1+x2)/2}" y="${(y1+y2)/2}" font-size="8" fill="#d6336c" text-anchor="middle">${esc(r.t)}</text>`:''}`}});
+    h+=sv+'<text x="322" y="18" font-size="12" fill="#222" text-anchor="middle">N ↑</text></svg><div class="mu">Tocá un lugar para ver quién está, qué pasó y qué contiene. Línea roja = viaje o ruta conocida.</div>'}
+   const sp=byId(sel)||byId(mroot);if(sp)h+=placePanel(sp)}
+  else{h+=`<input type="file" accept="image/*" onchange="pick(this.files[0],'m')">`;if(S.map.img){h+=`<button class="b" onclick="autoPin()">Ubicar lugares automáticamente</button><select onchange="pinE=this.value"><option value="">Elegí un lugar y tocá el mapa…</option>${S.ents.filter(e=>e.type=='lugar').map(e=>`<option value="${e.id}" ${pinE==e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
+   <div style="position:relative" onclick="mapClick(event)"><img class="t" src="${S.map.img}" style="width:100%;display:block">${routesOv()}${S.map.pins.filter(p=>byId(p.e)).map(p=>`<span class="pin" style="left:${p.x}%;top:${p.y}%">${esc(byId(p.e).name)}</span>`).join('')}</div>
+   ${S.map.pins.map((p,i)=>byId(p.e)?`<button class="s" onclick="S.map.pins.splice(${i},1);save();draw()">✕ ${esc(byId(p.e).name)}</button>`:'').join('')}`}else h+='<div class="mu">Subí un boceto o mapa de tu universo y ubicá los lugares con pines.</div>'}}
+ if(tab=='write')h=writeView();
+ if(tab=='net')h='<button class="s" onclick="tab=\'world\';draw()">← Mundo</button>'+net();
+ if(tab=='time')h=`<select onchange="tf=this.value;draw()"><option value="">Todos los hechos</option>${S.ents.filter(e=>e.type=='personaje').map(e=>`<option value="${e.id}" ${tf==e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select>`+(S.evs.length?'':'<div class="mu">Sin hechos aún.</div>')+S.evs.map((v,i)=>tf&&!v.who.includes(tf)?'':`<div class="card"><b>${i+1}.</b> <span class="mu">${esc(v.when)}${v.same?' (mismo momento que otro hecho)':''}</span> ${esc(v.title)}<div class="mu">${esc(v.who.map(x=>byId(x)?.name).filter(Boolean).join(', '))}</div><button class="s" onclick="mv(${i},-1)">↑</button><button class="s" onclick="mv(${i},1)">↓</button><button class="s" onclick="S.evs.splice(${i},1);save();draw()">✕</button></div>`).join('');
+ if(tab=='guide'){h=`<label class="mu">¿Cómo termina / a dónde querés llegar?</label><textarea rows="2" onchange="S.end=this.value;save();draw()">${esc(S.end)}</textarea><h3>Preguntas y sugerencias</h3>`+guide().map(x=>`<div class="card">${esc(x)}</div>`).join('')+'<h3>Hilos abiertos ('+S.threads.length+')</h3><div class="mu">Misterios, secretos y promesas que mencionaste y que habría que resolver.</div>'+S.threads.map((x,i)=>`<div class="card">${esc(x.t)}<br><button class="s" onclick="S.threads.splice(${i},1);save();draw()">Resuelto</button></div>`).join('')}
+ if(tab=='more')h=PJH()+`<button class="b" onclick="dl('novela-respaldo.json',JSON.stringify(S),'application/json')">Exportar respaldo</button><button class="b" onclick="$('#imp').click()">Importar</button><input id="imp" type="file" hidden onchange="imp(this.files[0])"><button class="b" onclick="biblia()">Exportar "biblia" (.md)</button><button class="b" onclick="manu()">Exportar manuscrito</button><p class="mu">Todo se guarda en este dispositivo y funciona sin internet ni IA. Más adelante se le puede sumar una IA opcional.</p>`;
+ $('#v').innerHTML=h}
+draw();
+</script></body></html>
